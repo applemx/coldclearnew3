@@ -170,7 +170,7 @@ struct SimplifiedBoard<'c> {
     reserve_is_hold: bool,
 }
 
-impl<E: Evaluation<R> + 'static, R: Clone + 'static> DagState<E, R> {
+impl<E: Evaluation<R> + 'static, R: Clone + 'static> DagState<E, R> {//DagStateインスタンスを初期化
     pub fn new(board: Board, use_hold: bool) -> Self {
         let mut this = DagState {
             board,
@@ -179,18 +179,19 @@ impl<E: Evaluation<R> + 'static, R: Clone + 'static> DagState<E, R> {
             gens_passed: 0,
             use_hold,
         };
-        this.init_generations();
+        this.init_generations();//初期化
         this
     }
 
     fn init_generations(&mut self) {
         let mut next_pieces = self.board.next_queue();
         // if hold is enabled and hold is empty, the generation piece is later than normal.
-        if self.use_hold && self.board.hold_piece.is_none() {
+        if self.use_hold && self.board.hold_piece.is_none() {// ホールドが有効で、ホールドが空の場合、次のピースは通常より遅れて配置されます。
             next_pieces
                 .next()
                 .expect("Not enough next pieces provided to initialize");
         }
+         // GenerationData構造体を作成して、generationsキューに追加します。
         self.generations
             .push_back(Generation::new(Box::new(bumpalo::Bump::new()), |bump| {
                 GenerationData {
@@ -215,7 +216,7 @@ impl<E: Evaluation<R> + 'static, R: Clone + 'static> DagState<E, R> {
         }
     }
 
-    pub fn find_and_mark_leaf(
+    pub fn find_and_mark_leaf(//ゲームツリー内で最適な次の手を見つける役割を果たす
         &mut self,
         forced_analysis_lines: &mut Vec<Vec<FallingPiece>>,
     ) -> Option<(NodeId, Board)> {
@@ -246,7 +247,7 @@ impl<E: Evaluation<R> + 'static, R: Clone + 'static> DagState<E, R> {
                 forced_analysis_lines.swap_remove(i);
             }
             if choice.is_some() {
-                return choice;
+                return choice;//最適な手を探し終わったことを示す。
             }
         }
 
@@ -255,6 +256,7 @@ impl<E: Evaluation<R> + 'static, R: Clone + 'static> DagState<E, R> {
             // in the iterator. filter_map allows us to ignore death nodes.
             let evaluation = &child_eval_fn(next_gen_nodes);
             let min_eval = children.iter().rev().filter_map(evaluation).next()?;
+            //ここだ！！！！！！！！！！！！！！！！！！！！！！
             let weights = children
                 .iter()
                 .enumerate()
@@ -269,20 +271,29 @@ impl<E: Evaluation<R> + 'static, R: Clone + 'static> DagState<E, R> {
         &mut self,
         mut chooser: impl for<'a> FnMut(&[Node<E>], &'a [Child<R>]) -> Option<&'a Child<R>>,
     ) -> Option<(NodeId, Board)> {
-        let mut board = self.board.clone();
-        let mut gen_index = 0;
-        let mut node_key = self.root as usize;
-        let gens_passed = self.gens_passed;
-        loop {
+        let mut board = self.board.clone();// 現在のゲームボードのクローンを作成します。
+        let mut gen_index = 0;//現在の世代（ゲームツリー内の深さ）を示します。
+        let mut node_key = self.root as usize;// 現在のノードのキーを示す変数を初期化します。
+        let gens_passed = self.gens_passed;// 過去の世代の数を示す変数を取得します。
+        loop {// 無限ループでゲームツリーを探索します。
             let [current, next] = self.get_gen_and_next(gen_index);
+             // 現在の世代と次の世代のノードを取得します。
             let result = current.with_data_mut(|gen| {
-                // Get the list of childs of the current node, or None if this is a leaf
+                // 探索の結果を保持する変数を初期化します。
+
+                 // 現在のノードの子ノードのリストを取得します。もしノードがリーフであればNoneです。
                 let children = match &gen.children {
+                    // 子ノードが既知の場合
                     Children::Known(_, childrens) => childrens[node_key].as_deref(),
+                    // 子ノードが仮定される場合
                     Children::Speculated(childrens) => {
                         // We must select a single group of children to search further. We do this by
                         // finding the set of valid next pieces and randomly selecting one uniformly.
                         // We then take the group of children associated with that piece.
+
+                    // さらに探索するために単一の子ノードグループを選択する必要があります。
+                    // これは、次に選択可能な有効なピースのセットを見つけ、一様にランダムに選択します。
+                    // 次に、そのピースに関連付けられた子ノードグループを取得します。
                         childrens[node_key].as_ref().map(|children| {
                             let mut pick_from = ArrayVec::<[_; 7]>::new();
                             for (p, c) in children {
@@ -290,6 +301,7 @@ impl<E: Evaluation<R> + 'static, R: Clone + 'static> DagState<E, R> {
                                     pick_from.push((p, &**c));
                                 }
                             }
+                            // ランダムにピースを選択し、ボードにそのピースを追加します。
                             let (piece, children) = *pick_from.choose(&mut thread_rng()).unwrap();
                             board.add_next_piece(piece);
                             children
@@ -298,10 +310,11 @@ impl<E: Evaluation<R> + 'static, R: Clone + 'static> DagState<E, R> {
                 };
 
                 if let Some(children) = children {
-                    // Branch case. Call the chooser to pick the branch to take.
+                    // ブランチの場合。chooserを呼び出して選択するブランチを選択します。
                     match next.with_data(|gen| {
                         let child = chooser(&gen.nodes, children)?;
                         advance(&mut board, child.placement);
+                        // ボードを更新して次のノードに進みます。
                         gen_index += 1;
                         node_key = child.node as usize;
                         Some(())
@@ -310,12 +323,13 @@ impl<E: Evaluation<R> + 'static, R: Clone + 'static> DagState<E, R> {
                         None => ControlFlow::Break(None),
                     }
                 } else if gen.nodes[node_key].marked {
-                    // this leaf has already been returned for processing, so it's not valid
+                    // このリーフはすでに処理のために返されており、無効です。
                     ControlFlow::Break(None)
                 } else {
-                    // found a valid leaf, so mark it and return it
+                     // 有効なリーフが見つかったので、それをマークし、返します。
                     gen.nodes[node_key].marked = true;
                     ControlFlow::Break(Some(NodeId {
+                        // 世代と過去の世代の数を組み合わせてNodeIDを生成します。
                         generation: gen_index as u32 + gens_passed,
                         slab_key: node_key as u32,
                     }))

@@ -7,25 +7,25 @@ use libflate::deflate;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 
-mod battle;
-mod mutate;
+mod battle;//バトルモジュール
+mod mutate;//変異モジュール
 
 use mutate::Mutateable;
 
 const BATTLES: usize = 6;
 
 fn main() {
-    let mut population = match std::fs::File::open("pop.json") {
+    let mut population = match std::fs::File::open("pop.json") {//ファイル、pop.jsonを開き、遺伝子プールをシリアライズしている。
         Ok(file) => serde_json::from_reader(file).unwrap_or_else(|e| {
             eprintln!("pop.json contained invalid data: {}", e);
             new_population()
         }),
-        Err(_) => new_population::<Standard>(),
+        Err(_) => new_population::<Standard>(),//ファイルが存在していない場合、新たな遺伝子プールを作成している
     };
 
-    let matchups = Arc::new(Mutex::new((true, VecDeque::new())));
+    let matchups = Arc::new(Mutex::new((true, VecDeque::new())));//matchupqueueを管理するために、arcを用いてスレッド間の同期を行っている。
     let (send, game_results) = channel();
-    for _ in 0..12 {
+    for _ in 0..12 {//12個のスレッドが生成され、それぞれ対戦を行う。
         let matchups = matchups.clone();
         let send = send.clone();
         std::thread::spawn(move || loop {

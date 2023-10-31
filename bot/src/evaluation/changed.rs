@@ -147,13 +147,23 @@ impl Evaluator for Standard {
         info
     }
 
+
+    /// Given a list of move candidates and the number of incoming garbage lines,
+    /// returns the best move candidate to make.
+    /// ムーブ候補のリストと、送られてくるごみの数を受け取り、最適なムーブ候補を返します。
     fn pick_move(
         &self,
         candidates: Vec<MoveCandidate<Value>>,
         incoming: u32,
     ) -> MoveCandidate<Value> {
         let mut backup = None;
+
+        // Iterate over each move candidate and evaluate it
+        // 各ムーブ候補を反復処理して評価します。
         for mv in candidates.into_iter() {
+            // If there is no incoming garbage or the candidate move is valid with the incoming garbage,
+            // return the candidate move
+            // 送られてくるごみがない場合、または候補のムーブが送られてくるごみと共に有効な場合、候補のムーブを返します。
             if incoming == 0
                 || mv.board.column_heights()[3..6]
                     .iter()
@@ -162,6 +172,8 @@ impl Evaluator for Standard {
                 return mv;
             }
 
+            // If the candidate move is not valid with the incoming garbage, store it as a backup move
+            // 候補のムーブが送られてくるごみと共に有効でない場合、バックアップムーブとして保存します。
             match backup {
                 None => backup = Some(mv),
                 Some(c) if c.evaluation.spike < mv.evaluation.spike => backup = Some(mv),
@@ -169,6 +181,8 @@ impl Evaluator for Standard {
             }
         }
 
+        // If no candidate move is valid with the incoming garbage, return the backup move
+        // 候補のムーブが送られてくるごみと共に有効でない場合、バックアップムーブを返します。
         return backup.unwrap();
     }
 
