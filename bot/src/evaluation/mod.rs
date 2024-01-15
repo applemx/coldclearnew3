@@ -6,7 +6,7 @@ mod standard;
 pub use self::standard::Standard;
 pub mod changed;
 
-pub trait Evaluator: Send + Sync {
+pub trait Evaluator: Send + Sync {//Evaluatorのトレイト　マルチスレッドに対応させている
     type Value: Evaluation<Self::Reward> + Send + 'static;
     type Reward: Clone + Send + 'static;
 

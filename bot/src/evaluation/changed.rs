@@ -92,7 +92,7 @@ impl Default for Standard {
 }
 
 impl Standard {
-    pub fn fast_config() -> Self {
+    pub fn fast_config() -> Self {//defaultと比べて、速度が必要な時に使用する。
         Standard {
             back_to_back: 10,
             bumpiness: -7,
@@ -407,6 +407,7 @@ fn bumpiness(board: &Board, well: usize) -> (i32, i32) {
 ///
 /// The first returned value is the number of cells that make up fully enclosed spaces (cavities).
 /// The second is the number of cells that make up partially enclosed spaces (overhangs).
+//下穴の状態をしらべてる関数　プレイフィールドの各列について、その列の高さよりも下にある空いている穴を調べる。
 fn cavities_and_overhangs(board: &Board) -> (i32, i32) {
     let mut cavities = 0;
     let mut overhangs = 0;
@@ -442,7 +443,7 @@ fn cavities_and_overhangs(board: &Board) -> (i32, i32) {
 ///
 /// The first returned value is the number of filled cells cover the topmost hole in the columns.
 /// The second value is the sum of the squares of those values.
-fn covered_cells(board: &Board) -> (i32, i32) {
+fn covered_cells(board: &Board) -> (i32, i32) {//穴を埋めるために必要なブロックの数を調べる。
     let mut covered = 0;
     let mut covered_sq = 0;
 
@@ -459,26 +460,36 @@ fn covered_cells(board: &Board) -> (i32, i32) {
     (covered, covered_sq)
 }
 
+// detect_shape! マクロの定義
 macro_rules! detect_shape {
     (
+        // マクロ呼び出し時に指定する名前
         $name:ident
+        // ピースの高さをパターンで指定
         heights [$($heights:pat)*]
+        // ピースの配置条件を指定
         require (|$b:pat, $xarg:pat| $req:expr)
+        // ピースの開始位置を指定
         start_y ($starty:expr)
+        // ピースの形状を指定
         success ($x:expr, $y:expr, $piece:ident, $facing:ident)
         $([$($rowspec:tt)*])*
     ) => {
+        // ピースを検出する関数を定義
         fn $name(board: &Board) -> Option<FallingPiece> {
+            // 各列について、高さのパターンに一致するかを調べる
             for (x, s) in board.column_heights().windows(
                 detect_shape!(@len [$($heights)*])
             ).enumerate() {
                 let x = x as i32;
                 if let [$($heights),*] = *s {
+                    // ピースの配置条件を満たすかを調べる
                     if !(|$b: &Board, $xarg: i32| $req)(board, x) { continue }
                     let y = $starty;
                     $(
                         {
                             $(
+                                // ピースの形状を調べる
                                 if !detect_shape!(@rowspec $rowspec board x y) {
                                     continue
                                 }
@@ -489,6 +500,7 @@ macro_rules! detect_shape {
                         #[allow(unused)]
                         let y = y-1;
                     )*
+                    // ピースを検出した場合、FallingPiece構造体を返す
                     return Some(FallingPiece {
                         kind: PieceState(Piece::$piece, RotationState::$facing),
                         x: x + $x,
@@ -497,12 +509,15 @@ macro_rules! detect_shape {
                     })
                 }
             }
+            // ピースが見つからなかった場合、Noneを返す
             None
         }
     };
+    // ピースの形状を指定するためのマクロ
     (@rowspec ? $board:ident $x:ident $y:ident) => { true };
     (@rowspec # $board:ident $x:ident $y:ident) => { $board.occupied($x, $y) };
     (@rowspec _ $board:ident $x:ident $y:ident) => { !$board.occupied($x, $y) };
+    // パターンの長さを計算するためのマクロ
     (@len []) => { 0 };
     (@len [$_:tt $($rest:tt)*]) => { 1 + detect_shape!(@len [$($rest)*]) }
 }
@@ -581,7 +596,7 @@ detect_shape! {
     [_ # ? ?]
 }
 
-fn cave_tslot(board: &Board, mut starting_point: FallingPiece) -> Option<FallingPiece> {
+fn cave_tslot(board: &Board, mut starting_point: FallingPiece) -> Option<FallingPiece> {//Tspinの判定を行う関数
     starting_point.sonic_drop(board);
     let x = starting_point.x;
     let y = starting_point.y;
@@ -747,19 +762,19 @@ impl std::ops::Mul<usize> for Value {
 }
 
 impl Evaluation<Reward> for Value {
-    fn modify_death(self) -> Self {
+    fn modify_death(self) -> Self {//死亡時の評価値をリセットする。
         Value {
             value: self.value - 1000,
             spike: 0,
         }
     }
 
-    fn weight(self, min: &Value, rank: usize) -> i64 {
+    fn weight(self, min: &Value, rank: usize) -> i64 {//評価値を重み付けする。
         let e = (self.value - min.value) as i64 + 10;
         e * e / (rank * rank + 1) as i64
     }
 
-    fn improve(&mut self, new_result: Self) {
+    fn improve(&mut self, new_result: Self) {//評価値を改善する。
         self.value = self.value.max(new_result.value);
         self.spike = self.spike.max(new_result.spike);
     }

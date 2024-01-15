@@ -274,7 +274,7 @@ where
         board: libtetris::Board,
     ) -> (Box<dyn input::InputSource>, String) {
         use crate::input::BotInput;
-        if self.is_bot {
+        if self.is_bot { //if self.is_bot
             let mut name = format!("Cold Clear\n{}", self.bot_config.weights.name());
             if self.bot_config.speed_limit != 0 {
                 name.push_str(&format!(
